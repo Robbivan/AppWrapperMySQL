@@ -1,60 +1,79 @@
+from functools import partial
 from tkinter import *
 from tkinter import ttk
 from tkinter import messagebox
-from functools import partial
 import mysql.connector
-from mysql.connector import Error
+
 
 login = 'root'
 password =''
+# изначально ставится root, но затем через global меняется на права относительно заданных прав для БД
 data_gen = {
     'host': "127.0.0.1",
     'user': login,
     'password': password,
-    'database': "autoser"
+    'database': "auto"
 }
 
-class Text_window(ttk.Frame):
-    def __init__(self, master, DB, *args, left_menu, options, **kwargs):
-        super().__init__(master, *args, **kwargs)
-        self.DB = DB
-        self.options = options
-        self.master = master
-        self.command = options['command']
-        self.text_w = False
-        if options['is_input']:
-            self.create_input_area()
+class Top_querry(ttk.Frame):
+    def __init__(self, admin, *args, link_db, queries, **kwargs):
+        super().__init__(admin, *args, **kwargs)
+        self.link_db = link_db # задается связь для БД
+        self.help_d = False
+        self.admin = admin
+        self.f_done = Frame(admin)
+        l_f = Frame(self)
+        for quer in queries.keys(): # Обрабатываются все запросы для текущего пользователя (клиент, администратор, сотрудник)
+            option = queries[quer]
+            argument = partial(self.make_text_info, option)
+            r = Button(l_f, text=quer, command=argument)
+            r.pack(side=TOP, fill=BOTH, expand=1)
+        l_f.pack(side=TOP, fill=BOTH)
+
+
+    def make_text_info(self, options): #создаются текстовые поля frame
+        if self.help_d:
+            self.w.pack_forget()
+            self.w.destroy()
+
+        self.w = Info_add_Text(self.admin,
+                               link_db=self.link_db,
+                               left_menu=self,
+                               add_opt=options)
+        self.w.pack(fill=BOTH, expand=1, side=RIGHT)
+        self.help_d = True
+
+
+
+class Info_add_Text(ttk.Frame): # обработка основных статических данных(текста), + вывод запросов
+    def __init__(self, admin, link_db, *args, left_menu, add_opt, **kwargs):
+        super().__init__(admin, *args, **kwargs)
+        self.link_db = link_db
+        self.add_opt = add_opt
+        self.admin = admin
+        self.command = add_opt['command']
+        self.w_write = False
+        if add_opt['is_input']:
+            self.make_area_in()
         else:
+            self.execute(self.add_opt['command'])
 
-            self.execute(self.options['command'])
-
-    def execute(self, formated_command):
-        if 'SELECT' not in formated_command: return
-        print("wd")
-        print(formated_command)
-        if (self.text_w):
+    def execute(self, query_in):
+        print(query_in)
+        if (self.w_write):
             self.l_res.pack_forget()
             self.l_res.destroy()
-            self.text_w = False
+            self.w_write = False
         columns = []
-
-
-
         connection = mysql.connector.connect(user=data_gen['user'], password=data_gen['password'], host=data_gen['host'],
                                              database=data_gen['database'])
         cursor = connection.cursor()
-        # db = self.eneter_db(login, password)
-        # cursor.execute("""SELECT name, price FROM services GROUP BY name, price;""")
-        # for row in cursor.fetchall():
-        #     print(row[0])
-        # cursor.execute("""SELECT * FROM cars;""")
-        # for row in cursor.fetchall():
-        #     print(row[2])
+
         try:
-            cursor.execute(formated_command)
+            cursor.execute(query_in)
         except:
-            messagebox.showinfo("Ошибка", "Проверьте данные")
-            self.text_w = False
+            messagebox.showinfo("Вероятная ошибка", "Проверьте данные")
+            self.w_write = False
             return
 
         all_rows = cursor.fetchall()
@@ -62,15 +81,15 @@ class Text_window(ttk.Frame):
 
         for row in cursor.fetchall():
             print("::",row)
-        # print(cursor.description)
+
         for i in cursor.description:
             columns.append(i[0])
         print(columns)
         if len(columns) == 0:
-            messagebox.showinfo("Успешно", "Ввод успешен")
-            self.text_w = False
+            messagebox.showinfo("Порядок", "Ввод завершен успешно")
+            self.w_write = False
             return
-        self.text_w = True
+        self.w_write = True
 
         self.l_res = ttk.Treeview(self, show="headings")
         self.l_res['columns'] = columns
@@ -85,27 +104,25 @@ class Text_window(ttk.Frame):
         self.l_res.pack(fill=BOTH, expand=1)
 
 
-
-
-    def create_input_area(self):
+    def make_area_in(self):
         f = Frame(self)
         self.f = f
-        if ('select' in self.options['is_input']):
-            q_d = self.options['is_input']['select']
-            ent = q_d['entity']
-            fields = q_d['fields']
-            self.checkboxes = q_d['checkboxes']
-            lab = Label(f, text=q_d['label'])
+        if ('select' in self.add_opt['is_input']):
+            querry_dop = self.add_opt['is_input']['select']
+            entity = querry_dop['entity']
+            fields = querry_dop['fields']
+            self.checkboxes = querry_dop['checkboxes']
+            lab = Label(f, text=querry_dop['label'])
             lab.pack(side=TOP)
             if self.checkboxes:
-                c_f = Frame(f)
-                self.v = StringVar(c_f, "1")
+                com_fr = Frame(f)
+                self.v = StringVar(com_fr, "1")
                 for (text, val) in self.checkboxes:
-                    Radiobutton(c_f, text=text, variable=self.v,
+                    Radiobutton(com_fr, text=text, variable=self.v,
                                 value=val).pack(side=LEFT)
-                c_f.pack(side=TOP)
-            querry_f = ', '.join(fields)
-            querry = "SELECT {} FROM {}".format(querry_f, ent)
+                com_fr.pack(side=TOP)
+            querry_dop = ', '.join(fields)
+            querry = "SELECT {} FROM {}".format(querry_dop, entity)
             connection = mysql.connector.connect(user=data_gen['user'], password=data_gen['password'], host=data_gen['host'],
                                                  database=data_gen['database'])
             cursor = connection.cursor()
@@ -117,24 +134,24 @@ class Text_window(ttk.Frame):
             for elem in all_rows:
                 elem = list(map(str, elem))
                 data = [elem[0]]
-                action_with_arg = partial(self.run_formated_command,self.command, data)
+                action_with_arg = partial(self.com_formated, self.command, data)
 
                 r = Button(f,text=' '.join(list(elem)),command=action_with_arg)
                 r.pack(side=TOP, fill=BOTH, expand=1)
 
-        elif 'insert' in self.options['is_input']:
-            q_d = self.options['is_input']['insert']
-            ent = q_d['entity']
-            fields = q_d['fields']
-            self.checkboxes = q_d['checkboxes']
-            lab = Label(f, text=q_d['label'])
+        elif 'insert' in self.add_opt['is_input']:
+            querry_dop = self.add_opt['is_input']['insert']
+            entity = querry_dop['entity']
+            fields = querry_dop['fields']
+            self.checkboxes = querry_dop['checkboxes']
+            lab = Label(f, text=querry_dop['label'])
             lab.pack(side=TOP)
             if self.checkboxes:
-                c_f = Frame(f)
-                l = Label(c_f, text=self.checkboxes[1])
+                com_fr = Frame(f)
+                l = Label(com_fr, text=self.checkboxes[1])
                 l.pack(side=TOP)
-                querry_f = ', '.join(self.checkboxes[2])
-                querry = "SELECT {} FROM {}".format(querry_f,
+                querry_dop = ', '.join(self.checkboxes[2])
+                querry = "SELECT {} FROM {}".format(querry_dop,
                                                     self.checkboxes[0])
 
                 connection = mysql.connector.connect(user=data_gen['user'], password=data_gen['password'],
@@ -145,14 +162,14 @@ class Text_window(ttk.Frame):
 
                 cursor.execute(querry)  # НАШЕЛЛЛЛЛЛЛ
                 all_rows = cursor.fetchall()
-                self.v = StringVar(c_f, "1")
+                self.v = StringVar(com_fr, "1")
                 for row in all_rows:
                     row = list(map(str, row))
-                    Radiobutton(c_f,
+                    Radiobutton(com_fr,
                                 text=' '.join(list(row)),
                                 variable=self.v,
                                 value=row[0]).pack(side=TOP)
-                c_f.pack(side=TOP)
+                com_fr.pack(side=TOP)
 
             self.entries = []
             for (field, field_name) in fields:
@@ -162,26 +179,26 @@ class Text_window(ttk.Frame):
 
                 self.i = StringVar(ent_f, "")
                 self.entries.append(self.i)
-                ent = Entry(ent_f, textvariable=self.i)
-                ent.pack(side=TOP)
+                entity = Entry(ent_f, textvariable=self.i)
+                entity.pack(side=TOP)
                 ent_f.pack(side=TOP)
             if self.checkboxes: self.entries.append(self.v)
-            action_with_arg = partial(self.run_formated_command, self.command,
+            action_with_arg = partial(self.com_formated, self.command,
                                       self.entries, True)
 
             Button(f, text='Ввод', command=action_with_arg).pack(side=TOP)
-        elif 'double_insert' in self.options['is_input']:
-            q_d = self.options['is_input']['double_insert']
-            ent = q_d['entity']
-            self.checkboxes = q_d['checkboxes']
+        elif 'double_insert' in self.add_opt['is_input']:
+            querry_dop = self.add_opt['is_input']['double_insert']
+            entity = querry_dop['entity']
+            self.checkboxes = querry_dop['checkboxes']
             self.entries = []
             cs_f = Frame(f)
             for box in self.checkboxes:
 
-                c_f = Frame(cs_f)
+                com_fr = Frame(cs_f)
                 querry = """SELECT {} 
                             FROM {}
-                            ;""".format(', '.join(box[1:]), box[0])
+                            ;""".format('®, '.join(box[1:]), box[0])
                 connection = mysql.connector.connect(user=data_gen['user'], password=data_gen['password'],
                                                      host=data_gen['host'],
                                                      database=data_gen['database'])
@@ -190,25 +207,25 @@ class Text_window(ttk.Frame):
 
                 cursor.execute(querry)  # НАШЕЛЛЛЛЛЛЛ
                 all_rows = cursor.fetchall()
-                self.c = StringVar(c_f, "0")
+                self.c = StringVar(com_fr, "0")
                 self.entries.append(self.c)
                 for row in all_rows:
                     row = list(map(str, row))
-                    Radiobutton(c_f,
+                    Radiobutton(com_fr,
                                 text=' '.join(list(row)),
                                 variable=self.c,
                                 value=row[0]).pack(side=TOP)
-                c_f.pack(side=LEFT)
+                com_fr.pack(side=LEFT)
             cs_f.pack(side=TOP)
-            action_with_arg = partial(self.run_formated_command, self.command,
+            action_with_arg = partial(self.com_formated, self.command,
                                       self.entries, True)
 
             Button(f, text='Ввод', command=action_with_arg).pack(side=TOP)
 
-        elif 'special_insert' in self.options['is_input']:
+        elif 'special_insert' in self.add_opt['is_input']:
             self.show = False
-            c_f = Frame(f)
-            l = Label(c_f, text='Заказы')
+            com_fr = Frame(f)
+            l = Label(com_fr, text='Заказы')
             l.pack(side=TOP)
             querry = """SELECT orders.id, cars.name, cars.car_number 
                         FROM orders, cars
@@ -221,17 +238,16 @@ class Text_window(ttk.Frame):
 
             cursor.execute(querry)  # НАШЕЛЛЛЛЛЛЛ
             all_rows = cursor.fetchall()
-            self.o = StringVar(c_f, "1")
+            self.o = StringVar(com_fr, "1")
             for row in all_rows:
                 row = list(map(str, row))
-                Radiobutton(c_f,
+                Radiobutton(com_fr,
                             text=' '.join(list(row)),
                             variable=self.o,
                             value=row[0]).pack(side=TOP)
-            c_f.pack(side=LEFT)
-            #Srvices
-            c_f = Frame(f)
-            l = Label(c_f, text='Услуги')
+            com_fr.pack(side=LEFT)
+            com_fr = Frame(f)
+            l = Label(com_fr, text='Услуги')
             l.pack(side=TOP)
             querry = """SELECT id, name, price 
                         FROM services
@@ -243,23 +259,22 @@ class Text_window(ttk.Frame):
             cursor = connection.cursor()
             columns = []
 
-            cursor.execute(querry)  # НАШЕЛЛЛЛЛЛЛ
+            cursor.execute(querry)
             all_rows = cursor.fetchall()
-            self.s = StringVar(c_f, "-1")
+            self.s = StringVar(com_fr, "-1")
             self.m = ''
             for row in all_rows:
                 row = list(map(str, row))
-                Radiobutton(c_f,
+                Radiobutton(com_fr,
                             text=' '.join(list(row)),
                             variable=self.s,
                             value=row[0],
-                            command=lambda: self.get_masters()).pack(side=TOP)
-            c_f.pack(side=LEFT)
+                            command=lambda: self.workers()).pack(side=TOP)
+            com_fr.pack(side=LEFT)
 
         f.pack(side=LEFT)
 
-    def get_masters(self):
-        #Masters
+    def workers(self): # вывод по работнику
         if self.show:
             self.c_f.pack_forget()
             self.c_f.destroy()
@@ -267,7 +282,7 @@ class Text_window(ttk.Frame):
         self.show = True
 
         self.c_f = Frame(self.f)
-        l = Label(self.c_f, text='Мастера')
+        l = Label(self.c_f, text='Работники')
         l.pack(side=TOP)
         querry = """SELECT * FROM masters
                     WHERE id IN (SELECT master_id 
@@ -281,7 +296,7 @@ class Text_window(ttk.Frame):
         cursor = connection.cursor()
         columns = []
 
-        cursor.execute(querry)  # НАШЕЛЛЛЛЛЛЛ
+        cursor.execute(querry)
         all_rows = cursor.fetchall()
         self.m = StringVar(self.c_f, "0")
         for row in all_rows:
@@ -291,7 +306,7 @@ class Text_window(ttk.Frame):
                         variable=self.m,
                         value=row[0]).pack(side=TOP)
         self.entries = [self.o, self.s, self.m]
-        action_with_arg = partial(self.run_formated_command, self.command,
+        action_with_arg = partial(self.com_formated, self.command,
                                   self.entries)
 
         self.b = Button(self.c_f, text='Ввод', command=action_with_arg).pack(
@@ -301,9 +316,9 @@ class Text_window(ttk.Frame):
         )
         self.c_f.pack(side=LEFT)
 
-    def run_formated_command(self, command, inputs, ent=False):
-        if 'special_insert' in self.options[
-                'is_input'] or 'double_insert' in self.options['is_input']:
+    def com_formated(self, command, inputs, ent=False): # дефолтный обработчик
+        if 'special_insert' in self.add_opt[
+                'is_input'] or 'double_insert' in self.add_opt['is_input']:
             self.inputs = inputs[:]
 
             f_command = command.format(*list(
@@ -324,43 +339,6 @@ class Text_window(ttk.Frame):
         self.execute(f_command)
 
 
-class Types(ttk.Frame):
-    def __init__(self, master, *args, DB, queries, **kwargs):
-
-        super().__init__(master, *args, **kwargs)
-        self.DB = DB
-        self.is_w = False
-        self.master = master
-        self.mod_f = Frame(master)
-
-        l_f = Frame(self, background='red')
-        # self.DB.execute("""SELECT name, price FROM services GROUP BY name, price;""")
-        #
-        # for row in self.DB.fetchall():
-        #     print(row[0])
-        buttons = []
-        # print(self.DB)
-        for button in queries.keys():
-            opt = queries[button]
-            print("QB",opt)
-            action_with_arg = partial(self.create_request_section, opt)
-            r = Button(l_f, text=button, command=action_with_arg)
-            r.pack(side=TOP, fill=BOTH, expand=1)
-
-        l_f.pack(side=LEFT, fill=BOTH)
-
-
-    def create_request_section(self, options):
-        if self.is_w:
-            self.w.pack_forget()
-            self.w.destroy()
-
-        self.w = Text_window(self.master,
-                             DB=self.DB,
-                             left_menu=self,
-                             options=options)
-        self.w.pack(fill=BOTH, expand=1, side=RIGHT)
-        self.is_w = True
 
 
 class Main_application(ttk.Frame):
@@ -371,26 +349,26 @@ class Main_application(ttk.Frame):
         self.master = master
         self.chose_f = Frame(self)
 
-        a_action_with_arg = partial(self.click_callback, 'admin')
-        a_button = Button(self.chose_f,
-                          text='Зайти под админом',
-                          command=a_action_with_arg)
-        a_button.pack(side=TOP, fill=BOTH, expand=1)
+        admin_action = partial(self.all_querrys, 'admin')
+        button_for_admin = Button(self.chose_f,
+                          text='Администратор',
+                          command=admin_action)
+        button_for_admin.pack(side=TOP, fill=BOTH, expand=1)
 
-        s_m_action_with_arg = partial(self.click_callback, 's_m')
-        s_m_button = Button(self.chose_f,
-                            text='Зайти под менеджером персонала',
-                            command=s_m_action_with_arg)
-        s_m_button.pack(side=TOP, fill=BOTH, expand=1)
+        client_action = partial(self.all_querrys, 's_m')
+        button_for_client = Button(self.chose_f,
+                            text='Клиент',
+                            command=client_action)
+        button_for_client.pack(side=TOP, fill=BOTH, expand=1)
 
-        c_m_action_with_arg = partial(self.click_callback, 'c_m')
-        c_m_button = Button(self.chose_f,
-                            text='Зайти под менеджером клиентов',
-                            command=c_m_action_with_arg)
-        c_m_button.pack(side=TOP, fill=BOTH, expand=1)
+        worker_action = partial(self.all_querrys, 'c_m')
+        button_for_worker = Button(self.chose_f,
+                            text='Сотрудник автосервиса',
+                            command=worker_action)
+        button_for_worker.pack(side=TOP, fill=BOTH, expand=1)
         self.chose_f.pack(side=TOP, fill=BOTH, expand=1, anchor=CENTER)
 
-    def click_callback(self, mode):
+    def all_querrys(self, mode):
         self.chose_f.pack_forget()
         self.chose_f.destroy()
         if mode == 'admin':
@@ -399,77 +377,73 @@ class Main_application(ttk.Frame):
             queries = {
                 "Список услуг": {
                     'command':
-                    "SELECT name, price FROM services GROUP BY name, price;",
+                    "SELECT title AS 'Услуга', price AS 'Цена' FROM services GROUP BY title, price;",
                     'is_input': False
                 },
                 "Список машин с их владельцами": {
-                    'command': "SELECT cl.name AS owner_name,cl.second_name, cars.name, car_number  FROM cars  INNER JOIN clients AS cl ON cars.owner_id = cl.id",
+                    'command': "SELECT cl.first_name AS 'Имя',cl.second_name AS 'Фамилия', model_car AS 'Модель машины', car_number AS 'Номер машины'  FROM cars  INNER JOIN clients AS cl ON cars.car_owner_id = cl.id",
                     'is_input': False
                 },
                 "Информация о машине (оказываемые услуги)": {
-                    'command': """SELECT type_id,name,price FROM services
-                                WHERE id IN	(SELECT service_id FROM order_services
-                                    WHERE order_id IN (SELECT id FROM orders
-                                        WHERE  car_id = (SELECT id FROM cars
-                                                                WHERE id = {})));""",
+                    'command': """SELECT title AS 'Услуга',price AS 'Цена' FROM services
+                                WHERE services.id IN (SELECT service_id FROM contract_services 
+                                    WHERE contract_id IN (SELECT contracts.id FROM contracts
+                                        WHERE  car_id = (SELECT cars.id FROM cars
+                                                                WHERE cars.id = {})));""",
                     'is_input': {
                         'select': {
-                            'label': 'Выберите машину',
+                            'label': 'Пожалуйста, выберите машину',
                             'entity': 'cars',
-                            'fields': ['id', 'name', 'car_number'],
+                            'fields': ['id', 'car_number', 'model_car'],
                             'checkboxes': (())
                         }
                     }
                 },
                 "Информация о работе мастера за период": {
                     'command':
-                    """ SELECT orders.id, services.name, services.price, orders.creation_date, orders.final_date
-                    FROM services, orders, (SELECT service_id, order_id 
-						 FROM order_services  
-						 WHERE master_id = (SELECT id 
-						                    FROM masters
-										    WHERE masters.id = {})
+                    """ SELECT contracts.id AS 'id заказа', services.title AS 'Название услуги', services.price AS 'Цена услуги', contracts.creation_date 
+                    AS 'Дата начала контракта(заказа)', contracts.end_date AS 'Дата окончания контракта(заказа)'
+                    FROM services, contracts, (SELECT service_id, contract_id 
+						 FROM contract_services   
+						 WHERE worker_id = (SELECT id 
+						                    FROM workers
+										    WHERE workers.id = {})
 						) AS link_worker_service
                     WHERE services.id = link_worker_service.service_id
-                    AND orders.id = link_worker_service.order_id AND  
-                    orders.final_date BETWEEN DATE_SUB(NOW(), INTERVAL {} DAY) AND NOW() ;""",
+                    AND contracts.id = link_worker_service.contract_id AND  
+                    contracts.end_date BETWEEN DATE_SUB(NOW(), INTERVAL {} DAY) AND NOW() ;""",
                     'is_input': {
                         'select': {
-                            'label':
-                            'Выберите период и мастера',
-                            'entity':
-                            'masters',
-                            'fields':
-                            ['id', 'name', 'second_name', 'last_name'],
-                            'checkboxes': (('день', 1), ('месяц', 30),
-                                           ('квартал', 91), ('год', 365))
+                            'label':'Пожалуйста, выберите период и мастера',
+                            'entity':'workers',
+                            'fields':['id','first_name', 'second_name', 'last_name'],
+                            'checkboxes': (('день', 1), ('месяц', 30), ('квартал', 90), ('год', 365))
                         }
                     }
                 },
                 "Рассчет стоимости услуг": {
                     'command':
-                    """SELECT  link_c_s.order_id, link_c_s.car_number, SUM(services.price) as sum  
-                                            FROM services, (SELECT order_services.service_id, car_from_contract.order_id, car_from_contract.car_number 
-                                                            FROM order_services, (SELECT orders.id as order_id, nes_cars.car_number 
-                                                                                FROM orders, (SELECT cars.id, cars.car_number  
+                    """SELECT  link_c_s.contract_id, link_c_s.car_number, SUM(services.price) as sum  
+                                            FROM services, (SELECT contract_services.service_id, car_from_contract.contract_id, car_from_contract.car_number 
+                                                            FROM contract_services , (SELECT contracts.id as contract_id, nes_cars.car_number 
+                                                                                FROM contracts, (SELECT cars.id, cars.car_number  
                                                                                                 FROM cars
                                                                                                 WHERE cars.id IN (SELECT id 
                                                                                                                 FROM cars 
-                                                                                                                WHERE cars.owner_id IN (SELECT id 
+                                                                                                                WHERE cars.car_owner_id IN (SELECT id 
                                                                                                                                     FROM clients
                                                                                                                                     WHERE clients.id = {}))
                                                                                             ) AS nes_cars
-                                                                                WHERE orders.car_id = nes_cars.id
+                                                                                WHERE contracts.car_id = nes_cars.id
                                                                                 ) AS car_from_contract
-                                                            WHERE car_from_contract.order_id = order_services.order_id) AS link_c_s
+                                                            WHERE car_from_contract.contract_id = contract_services.contract_id) AS link_c_s
                                                 WHERE services.id = link_c_s.service_id
-                                                GROUP BY link_c_s.order_id;""",
+                                                GROUP BY link_c_s.contract_id;""",
                     'is_input': {
                         'select': {
-                            'label': 'Выберите клиента',
+                            'label': 'Пожалуйста, выберите клиента',
                             'entity': 'clients',
-                            'fields':
-                            ['id', 'name', 'second_name', 'last_name'],
+                            'fields':['first_name', 'second_name', 'last_name'],
                             'checkboxes': (())
                         }
                     }
@@ -485,8 +459,7 @@ class Main_application(ttk.Frame):
                             'Введите данные мастера',
                             'entity':
                             'clients',
-                            'fields': [['name', 'имя'],
-                                       ['second_name', 'фамилия'],
+                            'fields': [['name', 'имя'], ['second_name', 'фамилия'],
                                        ['last_name', 'отчество'],
                                        ['phone_number', 'номер телефона']],
                             'checkboxes': (()),
@@ -839,7 +812,7 @@ class Main_application(ttk.Frame):
             }
 
         try:
-            f = Types(self, DB=NONE, queries=queries)  # объект инициализируемый
+            f = Top_querry(self, link_db=NONE, queries=queries)  # объект инициализируемый
             f.pack(fill=BOTH, side=LEFT)
         except 1210:
             print("ProgrammingError")
@@ -852,7 +825,7 @@ class Main_application(ttk.Frame):
 root = Tk()
 root.title("Программа для автосервис")
 
-root.minsize(900, 700)
+root.minsize(900, 400)
 app = Main_application(root)
 app.pack(fill=BOTH, expand=1)
 root.mainloop()
